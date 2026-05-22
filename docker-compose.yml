@@ -1,0 +1,96 @@
+name: transcritor
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ./data/redis:/data
+
+  tusd:
+    image: tusproject/tusd:v2.4.0
+    restart: unless-stopped
+    command:
+      - -upload-dir=/srv/tusd-data
+      - -behind-proxy
+      - -hooks-dir=/srv/tusd-hooks
+      - -hooks-enabled-events=post-finish
+      - -max-size=21474836480   # 20 GB
+      - -port=1080
+    environment:
+      BACKEND_HOOK_URL: http://backend:8000/tus/hook
+    volumes:
+      - ./data/uploads:/srv/tusd-data
+      - ./tusd/hooks:/srv/tusd-hooks:ro
+    ports:
+      - "1080:1080"
+    depends_on:
+      backend:
+        condition: service_started
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+      UPLOAD_DIR: /data/uploads
+      MODELS_DIR: /data/models
+      DB_PATH: /data/transcritor.db
+    volumes:
+      - ./data:/data
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+      UPLOAD_DIR: /data/uploads
+      MODELS_DIR: /data/models
+      DB_PATH: /data/transcritor.db
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./data:/data
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_URL: http://localhost:8000
+      PUBLIC_TUSD_URL: http://localhost:1080/files/
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

@@ -1,0 +1,22 @@
+.env
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+*.egg-info/
+
+# Node
+node_modules/
+.svelte-kit/
+build/
+.vite/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store

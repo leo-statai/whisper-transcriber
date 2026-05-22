@@ -1,0 +1,17 @@
+#!/bin/sh
+# tusd invoca este hook após o upload terminar.
+# O payload JSON do tusd vem via stdin; repassamos ao backend.
+set -eu
+
+BACKEND_URL="${BACKEND_HOOK_URL:-http://backend:8000/tus/hook}"
+
+body=$(cat)
+
+wget -qO- \
+  --header="Content-Type: application/json" \
+  --header="Hook-Name: post-finish" \
+  --post-data="$body" \
+  "$BACKEND_URL" >/dev/null || {
+    echo "Falha ao notificar backend em $BACKEND_URL" >&2
+    exit 1
+  }
