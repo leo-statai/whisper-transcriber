@@ -1,8 +1,8 @@
-# Transcritor v2
+# Whisper Transcriber
 
 <div align="center">
 
-**Aplicação web local para transcrição de áudio e vídeo com GPU NVIDIA**
+**Self-hosted web app for audio and video transcription with NVIDIA GPU**
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -14,22 +14,22 @@
 
 ---
 
-## Visão Geral
+## Overview
 
-O **Transcritor v2** é uma aplicação self-hosted para transcrição automática de arquivos de áudio e vídeo, incluindo arquivos de vários GB. Usa o modelo **Whisper** via **faster-whisper** (CTranslate2) com aceleração NVIDIA CUDA para transcrição rápida e precisa diretamente na sua máquina — sem enviar dados para serviços externos.
+**Whisper Transcriber** is a self-hosted application for automatic transcription of audio and video files — including multi-GB inputs. It runs **Whisper** through **faster-whisper** (CTranslate2) with NVIDIA CUDA acceleration, producing fast and accurate transcripts entirely on your own hardware, without sending data to external services.
 
-### Destaques
+### Highlights
 
-- **Uploads resumíveis** via protocolo tus — sem perder progresso se a conexão cair
-- **Streaming em tempo real** do progresso da transcrição via Server-Sent Events
-- **5 formatos de exportação**: SRT, VTT, TXT, JSON, DOCX
-- **Detecção automática de idioma** ou idioma fixo configurável
-- **Cancelamento cooperativo** de jobs em andamento
-- **Interface em pt-BR** com tema claro/escuro
+- **Resumable uploads** via the tus protocol — no progress lost if the connection drops
+- **Real-time transcription progress** streamed over Server-Sent Events
+- **5 export formats**: SRT, VTT, TXT, JSON, DOCX
+- **Automatic language detection**, or a configurable fixed language
+- **Cooperative cancellation** of running jobs
+- **UI in Brazilian Portuguese** with light/dark theme
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -48,125 +48,127 @@ O **Transcritor v2** é uma aplicação self-hosted para transcrição automáti
 └─────────────────────────────────────────────────────┘
 ```
 
-| Serviço   | Tecnologia                          | Função                                    |
-|-----------|-------------------------------------|-------------------------------------------|
-| frontend  | SvelteKit 2 + Tailwind CSS 4        | Interface do usuário                      |
-| backend   | FastAPI + SQLModel + SSE            | API REST, fila de jobs, exportação        |
-| worker    | ARQ + faster-whisper + CTranslate2  | Transcrição com GPU                       |
-| redis     | Redis 7                             | Fila de tarefas e pub/sub                 |
-| tusd      | tus v2.4 (uploads resumíveis)       | Recepção de arquivos grandes              |
+| Service   | Stack                               | Role                                        |
+|-----------|-------------------------------------|---------------------------------------------|
+| frontend  | SvelteKit 2 + Tailwind CSS 4        | User interface                              |
+| backend   | FastAPI + SQLModel + SSE            | REST API, job queue, export                 |
+| worker    | ARQ + faster-whisper + CTranslate2  | GPU transcription                           |
+| redis     | Redis 7                             | Task queue and pub/sub                      |
+| tusd      | tus v2.4 (resumable uploads)        | Large-file upload receiver                  |
 
 ---
 
-## Pré-requisitos
+## Prerequisites
 
-- **Linux** (Ubuntu 20.04+ recomendado) com Docker Engine ≥ 24 e Docker Compose v2
-- **GPU NVIDIA** com driver atualizado (testado com CUDA 12.4)
-- **NVIDIA Container Toolkit** instalado
+- **Linux** (Ubuntu 20.04+ recommended) with Docker Engine ≥ 24 and Docker Compose v2
+- **NVIDIA GPU** with an up-to-date driver (tested with CUDA 12.4)
+- **NVIDIA Container Toolkit** installed
 
-### Verificar se a GPU está disponível no Docker
+### Verify GPU access from Docker
 
 ```bash
 docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
 
-> Se o comando falhar, execute o script auxiliar incluído no projeto:
+> If the command fails, run the helper script included in the project:
 > ```bash
 > bash install-nvidia-toolkit.sh
 > ```
 
 ---
 
-## Instalação e Execução
+## Installation and execution
 
-### 1. Clone o repositório
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/leo-statai/transcritor_v2.git
-cd transcritor_v2
+git clone https://github.com/leo-statai/whisper-transcriber.git
+cd whisper-transcriber
 ```
 
-### 2. Configure as variáveis de ambiente
+### 2. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Edite `.env` conforme sua GPU:
+Edit `.env` according to your GPU:
 
-| Variável               | Padrão          | Descrição                                              |
+| Variable               | Default         | Description                                            |
 |------------------------|-----------------|--------------------------------------------------------|
-| `WHISPER_MODEL`        | `large-v3`      | Modelo: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` |
-| `WHISPER_COMPUTE_TYPE` | `float16`       | Precisão: `float16` (GPU) ou `int8_float16` (menos VRAM) |
-| `WHISPER_BEAM_SIZE`    | `5`             | Beam search (maior = mais preciso, mais lento)         |
-| `WHISPER_VAD_FILTER`   | `true`          | Filtro de silêncio — recomendado para arquivos longos  |
-| `WHISPER_LANGUAGE`     | *(vazio)*       | Forçar idioma (`pt`, `en`, `es`...) ou deixar vazio para autodetect |
-| `WORKER_CONCURRENCY`   | `1`             | Jobs simultâneos (1 para GPU dedicada)                 |
+| `WHISPER_MODEL`        | `large-v3`      | Model: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` |
+| `WHISPER_COMPUTE_TYPE` | `float16`       | Precision: `float16` (GPU) or `int8_float16` (less VRAM) |
+| `WHISPER_BEAM_SIZE`    | `5`             | Beam search width (higher = more accurate, slower)     |
+| `WHISPER_VAD_FILTER`   | `true`          | Silence filter — recommended for long files            |
+| `WHISPER_LANGUAGE`     | *(empty)*       | Force a language (`pt`, `en`, `es`…) or leave empty for autodetect |
+| `WORKER_CONCURRENCY`   | `1`             | Concurrent jobs (1 for a dedicated GPU)                |
 
-### 3. Suba os contêineres
+### 3. Start the containers
 
 ```bash
 docker compose up -d --build
 ```
 
-> No primeiro boot, o worker baixa o modelo Whisper (~3 GB para `large-v3`). Acompanhe com:
+> On first boot, the worker downloads the Whisper model (~3 GB for `large-v3`). Follow along with:
 > ```bash
 > docker compose logs -f worker
 > ```
 
-### 4. Acesse a interface
+### 4. Open the UI
 
 ```
 http://localhost:3000
 ```
 
-Em um home server na rede local, substitua `localhost` pelo IP da máquina.
+On a home server on the local network, replace `localhost` with the machine's IP.
 
 ---
 
-## Como Usar
+## How to use
 
-1. Clique em **Novo upload** na barra superior
-2. Arraste um arquivo de áudio ou vídeo (ou clique para selecionar) — até **20 GB**
-3. Escolha o idioma do áudio, ou deixe em **Detectar automaticamente**
-4. Clique em **Iniciar transcrição**
-   - Uploads grandes usam o protocolo **tus**: se a conexão cair, retome reabrindo a página
-5. Acompanhe a transcrição rolando em tempo real na tela do job
-6. Ao concluir, baixe no formato desejado: **SRT · VTT · TXT · JSON · DOCX**
+1. Click **Novo upload** in the top bar
+2. Drop an audio or video file (or click to pick) — up to **20 GB**
+3. Pick the audio language, or leave **Detectar automaticamente** for auto-detection
+4. Click **Iniciar transcrição**
+   - Large uploads use the **tus** protocol: if the connection drops, resume by reopening the page
+5. Watch the transcript stream live on the job screen
+6. When finished, download in the format you want: **SRT · VTT · TXT · JSON · DOCX**
 
----
-
-## API REST
-
-| Método   | Rota                                      | Descrição                              |
-|----------|-------------------------------------------|----------------------------------------|
-| `GET`    | `/health`                                 | Health check                           |
-| `GET`    | `/jobs`                                   | Lista todos os jobs                    |
-| `GET`    | `/jobs/{id}`                              | Detalhes e segmentos de um job         |
-| `GET`    | `/jobs/{id}/stream`                       | SSE com progresso em tempo real        |
-| `GET`    | `/jobs/{id}/export?format=srt\|vtt\|txt\|json\|docx` | Download do arquivo exportado |
-| `POST`   | `/jobs/{id}/cancel`                       | Cancela um job em execução             |
-| `DELETE` | `/jobs/{id}`                              | Remove job e arquivo do disco          |
-| `POST`   | `/tus/hook`                               | Webhook interno do tusd                |
-
-**Uploads** (protocolo tus 1.0): `POST/PATCH/HEAD http://<host>:1080/files/`
+> The UI is currently in Brazilian Portuguese; English localisation is on the roadmap.
 
 ---
 
-## Estrutura do Projeto
+## REST API
+
+| Method   | Route                                     | Description                                |
+|----------|-------------------------------------------|--------------------------------------------|
+| `GET`    | `/health`                                 | Health check                               |
+| `GET`    | `/jobs`                                   | List all jobs                              |
+| `GET`    | `/jobs/{id}`                              | Job details and segments                   |
+| `GET`    | `/jobs/{id}/stream`                       | SSE stream of real-time progress           |
+| `GET`    | `/jobs/{id}/export?format=srt\|vtt\|txt\|json\|docx` | Download exported file          |
+| `POST`   | `/jobs/{id}/cancel`                       | Cancel a running job                       |
+| `DELETE` | `/jobs/{id}`                              | Remove job and file from disk              |
+| `POST`   | `/tus/hook`                               | Internal tusd webhook                      |
+
+**Uploads** (tus 1.0 protocol): `POST/PATCH/HEAD http://<host>:1080/files/`
+
+---
+
+## Project structure
 
 ```
-transcritor_v2/
-├── docker-compose.yml          # Orquestração dos 5 serviços
-├── .env.example                # Variáveis de ambiente (modelo, precisão, idioma)
-├── install-nvidia-toolkit.sh   # Helper para instalar o NVIDIA Container Toolkit
+whisper-transcriber/
+├── docker-compose.yml          # Orchestration of 5 services
+├── .env.example                # Env vars (model, precision, language)
+├── install-nvidia-toolkit.sh   # Helper to install the NVIDIA Container Toolkit
 │
 ├── backend/
-│   ├── Dockerfile.api          # Imagem CUDA + FastAPI (uvicorn)
-│   ├── Dockerfile.worker       # Imagem CUDA + ARQ worker
+│   ├── Dockerfile.api          # CUDA + FastAPI (uvicorn) image
+│   ├── Dockerfile.worker       # CUDA + ARQ worker image
 │   ├── pyproject.toml
-│   ├── app/                    # FastAPI: rotas, modelos, exportadores (SRT/VTT/TXT/JSON/DOCX)
-│   └── worker/                 # Tarefa transcribe_job com faster-whisper
+│   ├── app/                    # FastAPI: routes, models, exporters (SRT/VTT/TXT/JSON/DOCX)
+│   └── worker/                 # transcribe_job task using faster-whisper
 │
 ├── frontend/
 │   ├── Dockerfile
@@ -174,19 +176,19 @@ transcritor_v2/
 │   └── ...
 │
 ├── tusd/
-│   └── hooks/post-finish       # Script que notifica o backend ao terminar upload
+│   └── hooks/post-finish       # Script that notifies the backend on upload completion
 │
-└── data/                       # Volumes persistentes (montados no Docker)
-    ├── uploads/                # Arquivos enviados pelo usuário
-    ├── models/                 # Modelos Whisper baixados
-    └── transcritor.db          # Banco SQLite com jobs e segmentos
+└── data/                       # Persistent volumes (mounted via Docker)
+    ├── uploads/                # User-uploaded files
+    ├── models/                 # Downloaded Whisper models
+    └── transcritor.db          # SQLite DB with jobs and segments
 ```
 
 ---
 
-## Verificações e Monitoramento
+## Verification and monitoring
 
-### Confirmar GPU dentro do worker
+### Confirm GPU inside the worker
 
 ```bash
 docker compose exec worker python -c \
@@ -194,15 +196,15 @@ docker compose exec worker python -c \
    m = WhisperModel('tiny', device='cuda'); print('GPU OK')"
 ```
 
-### Logs em tempo real
+### Live logs
 
 ```bash
-docker compose logs -f worker    # Progresso das transcrições
-docker compose logs -f backend   # API e hooks
+docker compose logs -f worker    # Transcription progress
+docker compose logs -f backend   # API and hooks
 docker compose logs -f tusd      # Uploads
 ```
 
-### Health check da API
+### API health check
 
 ```bash
 curl http://localhost:8000/health
@@ -211,51 +213,52 @@ curl http://localhost:8000/health
 
 ---
 
-## Solução de Problemas
+## Troubleshooting
 
-| Sintoma | Causa provável | Solução |
-|---------|---------------|---------|
-| `cuDNN missing` / falha ao carregar modelo | cuDNN ausente | A imagem base já inclui cuDNN 9 — confirme com `docker compose exec worker bash -c 'find / -name "libcudnn*" 2>/dev/null'` |
-| GPU não visível no container | NVIDIA Container Toolkit não configurado | Execute `bash install-nvidia-toolkit.sh` ou siga a [documentação oficial](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
-| Upload trava / timeout | Arquivo muito grande, conexão instável | O protocolo tus retoma automaticamente — feche e reabra o navegador |
-| Pouca VRAM / OOM | Modelo grande + GPU com pouca memória | Ajuste `WHISPER_COMPUTE_TYPE=int8_float16` ou `WHISPER_MODEL=medium` no `.env` |
-| Sem GPU (CPU only) | Máquina sem GPU NVIDIA | Remova o bloco `deploy.resources` do worker no `docker-compose.yml` e defina `WHISPER_COMPUTE_TYPE=int8` |
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `cuDNN missing` / model load failure | cuDNN absent | The base image already ships cuDNN 9 — confirm with `docker compose exec worker bash -c 'find / -name "libcudnn*" 2>/dev/null'` |
+| GPU not visible in container | NVIDIA Container Toolkit not configured | Run `bash install-nvidia-toolkit.sh` or follow the [official docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
+| Upload stalls / times out | Very large file, unstable connection | The tus protocol resumes automatically — close and reopen the browser |
+| Low VRAM / OOM | Large model on a small GPU | Set `WHISPER_COMPUTE_TYPE=int8_float16` or `WHISPER_MODEL=medium` in `.env` |
+| No GPU (CPU only) | Machine without NVIDIA GPU | Remove the `deploy.resources` block from the worker in `docker-compose.yml` and set `WHISPER_COMPUTE_TYPE=int8` |
 
 ---
 
-## Stack de Tecnologias
+## Tech stack
 
 **Backend**
-- [FastAPI](https://fastapi.tiangolo.com/) — API REST assíncrona
-- [ARQ](https://arq-docs.helpmanual.io/) — Fila de tasks com Redis
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — Whisper otimizado com CTranslate2
-- [SQLModel](https://sqlmodel.tiangolo.com/) — ORM sobre SQLite
+- [FastAPI](https://fastapi.tiangolo.com/) — async REST API
+- [ARQ](https://arq-docs.helpmanual.io/) — Redis-backed task queue
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — Whisper optimised via CTranslate2
+- [SQLModel](https://sqlmodel.tiangolo.com/) — ORM on top of SQLite
 - [sse-starlette](https://github.com/sysid/sse-starlette) — Server-Sent Events
 
 **Frontend**
 - [SvelteKit 2](https://kit.svelte.dev/) + [Svelte 5](https://svelte.dev/)
 - [Tailwind CSS 4](https://tailwindcss.com/)
-- [TanStack Query](https://tanstack.com/query) — Cache e sincronização de dados
-- [tus-js-client](https://github.com/tus/tus-js-client) — Uploads resumíveis
-- [Lucide](https://lucide.dev/) — Ícones
+- [TanStack Query](https://tanstack.com/query) — data cache and sync
+- [tus-js-client](https://github.com/tus/tus-js-client) — resumable uploads
+- [Lucide](https://lucide.dev/) — icons
 
-**Infraestrutura**
-- [Docker Compose](https://docs.docker.com/compose/) — Orquestração local
-- [tusd](https://github.com/tus/tusd) — Servidor tus para uploads grandes
-- [Redis 7](https://redis.io/) — Broker de filas
+**Infrastructure**
+- [Docker Compose](https://docs.docker.com/compose/) — local orchestration
+- [tusd](https://github.com/tus/tusd) — tus server for large uploads
+- [Redis 7](https://redis.io/) — queue broker
 
 ---
 
 ## Roadmap
 
-- [ ] Diarização de falantes com [pyannote.audio](https://github.com/pyannote/pyannote-audio)
-- [ ] Tradução automática (`task="translate"` do Whisper)
-- [ ] Edição manual de transcrições no navegador
-- [ ] Suporte multi-usuário com autenticação
-- [ ] Checkpointing de jobs interrompidos no meio da transcrição
+- [ ] Speaker diarisation with [pyannote.audio](https://github.com/pyannote/pyannote-audio)
+- [ ] Automatic translation (Whisper's `task="translate"`)
+- [ ] In-browser transcript editing
+- [ ] Multi-user support with authentication
+- [ ] Checkpointing of jobs interrupted mid-transcription
+- [ ] English UI localisation
 
 ---
 
-## Licença
+## License
 
-Distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
+Released under the **MIT License**. See [LICENSE](LICENSE) for details.
